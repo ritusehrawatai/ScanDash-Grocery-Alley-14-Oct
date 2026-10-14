@@ -5799,7 +5799,7 @@ async function startServer() {
 
   // POST /api/invoices/upload
   // Accepts multipart file or base64 JSON payload
-  app.post('/api/invoices/upload', uploadInvoiceMiddleware.single('file'), (req: Request, res: Response) => {
+  app.post('/api/invoices/upload', uploadInvoiceMiddleware.single('file') as any, (req: Request, res: Response) => {
     let fileBuffer: Buffer | null = null;
     let originalFilename = '';
     let mimeType = '';

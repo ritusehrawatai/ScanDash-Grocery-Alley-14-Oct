@@ -1,7 +1,6 @@
 import { AuditLog, AuditLogFilter } from '../types/audit';
 import { authStorage } from '../utils/authStorage';
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { BASE_URL } from './baseUrl';
 
 function getAuthHeaders(): HeadersInit {
   const token = authStorage.getToken();
@@ -35,6 +34,7 @@ export async function fetchAllAuditLogs(filters?: AuditLogFilter): Promise<Audit
 
   const query = params.toString() ? `?${params.toString()}` : '';
   const res = await fetch(`${BASE_URL}/api/audit-logs${query}`, {
+    credentials: 'include',
     headers: getAuthHeaders(),
   });
 
@@ -52,6 +52,7 @@ export async function fetchAllAuditLogs(filters?: AuditLogFilter): Promise<Audit
  */
 export async function fetchAuditLogById(id: number): Promise<AuditLog> {
   const res = await fetch(`${BASE_URL}/api/audit-logs/${id}`, {
+    credentials: 'include',
     headers: getAuthHeaders(),
   });
 
@@ -69,6 +70,7 @@ export async function fetchAuditLogById(id: number): Promise<AuditLog> {
  */
 export async function exportAuditLogsCsv(): Promise<string> {
   const res = await fetch(`${BASE_URL}/api/audit-logs/export/csv`, {
+    credentials: 'include',
     headers: {
       Authorization: `Bearer ${authStorage.getToken() || ''}`,
     },
@@ -103,6 +105,7 @@ export async function downloadAuditLogsCsv(): Promise<void> {
 export async function cancelSale(saleId: number, reason: string = 'Voided / Returned'): Promise<any> {
   const res = await fetch(`${BASE_URL}/api/sales/${saleId}/cancel`, {
     method: 'POST',
+    credentials: 'include',
     headers: getAuthHeaders(),
     body: JSON.stringify({ reason }),
   });

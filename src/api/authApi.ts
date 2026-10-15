@@ -1,7 +1,6 @@
 import { LoginCredentials, AuthApiResponse, User } from '../types/auth';
 import { authStorage } from '../utils/authStorage';
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { BASE_URL } from './baseUrl';
 
 export class AuthApiError extends Error {
   status: number;
@@ -15,6 +14,7 @@ export class AuthApiError extends Error {
 export async function loginUser(credentials: LoginCredentials): Promise<AuthApiResponse> {
   const res = await fetch(`${BASE_URL}/api/v1/auth/login`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
     },
@@ -41,6 +41,7 @@ export async function logoutUser(): Promise<void> {
   try {
     await fetch(`${BASE_URL}/api/v1/auth/logout`, {
       method: 'POST',
+      credentials: 'include',
       headers,
     });
   } catch {
@@ -58,6 +59,7 @@ export async function fetchCurrentUser(): Promise<User | null> {
 
   const res = await fetch(`${BASE_URL}/api/v1/auth/me`, {
     method: 'GET',
+    credentials: 'include',
     headers,
   });
 

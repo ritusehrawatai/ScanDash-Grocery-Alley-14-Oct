@@ -1,7 +1,6 @@
 import { User, CreateUserData, UpdateUserData, UserRole } from '../types/auth';
 import { authStorage } from '../utils/authStorage';
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { BASE_URL } from './baseUrl';
 
 function getAuthHeaders(): HeadersInit {
   const token = authStorage.getToken();
@@ -13,6 +12,7 @@ function getAuthHeaders(): HeadersInit {
 
 export async function fetchAllUsers(): Promise<User[]> {
   const res = await fetch(`${BASE_URL}/api/users`, {
+    credentials: 'include',
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -25,6 +25,7 @@ export async function fetchAllUsers(): Promise<User[]> {
 
 export async function fetchUserById(id: number): Promise<User> {
   const res = await fetch(`${BASE_URL}/api/users/${id}`, {
+    credentials: 'include',
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -38,6 +39,7 @@ export async function fetchUserById(id: number): Promise<User> {
 export async function createUser(data: CreateUserData): Promise<User> {
   const res = await fetch(`${BASE_URL}/api/users`, {
     method: 'POST',
+    credentials: 'include',
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   });
@@ -52,6 +54,7 @@ export async function createUser(data: CreateUserData): Promise<User> {
 export async function updateUser(id: number, data: UpdateUserData): Promise<User> {
   const res = await fetch(`${BASE_URL}/api/users/${id}`, {
     method: 'PUT',
+    credentials: 'include',
     headers: getAuthHeaders(),
     body: JSON.stringify(data),
   });
@@ -66,6 +69,7 @@ export async function updateUser(id: number, data: UpdateUserData): Promise<User
 export async function updateUserRole(id: number, role: UserRole): Promise<User> {
   const res = await fetch(`${BASE_URL}/api/users/${id}/role`, {
     method: 'PUT',
+    credentials: 'include',
     headers: getAuthHeaders(),
     body: JSON.stringify({ role }),
   });
@@ -80,6 +84,7 @@ export async function updateUserRole(id: number, role: UserRole): Promise<User> 
 export async function updateUserStatus(id: number, enabled: boolean): Promise<User> {
   const res = await fetch(`${BASE_URL}/api/users/${id}/status`, {
     method: 'PUT',
+    credentials: 'include',
     headers: getAuthHeaders(),
     body: JSON.stringify({ enabled }),
   });
@@ -94,6 +99,7 @@ export async function updateUserStatus(id: number, enabled: boolean): Promise<Us
 export async function deleteUser(id: number): Promise<void> {
   const res = await fetch(`${BASE_URL}/api/users/${id}`, {
     method: 'DELETE',
+    credentials: 'include',
     headers: getAuthHeaders(),
   });
   if (!res.ok) {
@@ -105,6 +111,7 @@ export async function deleteUser(id: number): Promise<void> {
 export async function updateProductThreshold(productId: number, threshold: number): Promise<any> {
   const res = await fetch(`${BASE_URL}/api/products/${productId}/threshold`, {
     method: 'PUT',
+    credentials: 'include',
     headers: getAuthHeaders(),
     body: JSON.stringify({ threshold }),
   });

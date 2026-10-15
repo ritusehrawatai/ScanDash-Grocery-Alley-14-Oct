@@ -1,6 +1,5 @@
 import { ApiResponse, HealthStatus } from '../types/health';
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { BASE_URL } from './baseUrl';
 
 export interface HealthCheckResult {
   data: HealthStatus | null;
@@ -14,6 +13,7 @@ export async function fetchHealthStatus(): Promise<HealthCheckResult> {
   const start = performance.now();
   try {
     const response = await fetch(`${BASE_URL}/api/v1/health`, {
+      credentials: 'include',
       headers: {
         Accept: 'application/json',
       },
@@ -55,7 +55,9 @@ export async function fetchHealthStatus(): Promise<HealthCheckResult> {
 export async function pingBackend(): Promise<{ success: boolean; latencyMs: number; response: string }> {
   const start = performance.now();
   try {
-    const response = await fetch(`${BASE_URL}/api/v1/health/ping`);
+    const response = await fetch(`${BASE_URL}/api/v1/health/ping`, {
+      credentials: 'include',
+    });
     const latencyMs = Math.round(performance.now() - start);
     if (!response.ok) {
       return { success: false, latencyMs, response: `HTTP ${response.status}` };

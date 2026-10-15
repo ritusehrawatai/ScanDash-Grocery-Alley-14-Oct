@@ -5,6 +5,7 @@ export interface InventoryItem {
   productId: number;
   productName: string;
   productSku: string;
+  productBarcode?: string;
   unit: string;
   currentQuantity: number;
   minimumInventoryThreshold: number;

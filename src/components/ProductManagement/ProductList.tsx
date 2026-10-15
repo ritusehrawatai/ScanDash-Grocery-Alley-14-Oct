@@ -29,6 +29,7 @@ export const ProductList: React.FC = () => {
 
   // Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [lastScannedBarcode, setLastScannedBarcode] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
@@ -67,15 +68,74 @@ export const ProductList: React.FC = () => {
     loadProducts();
   }, []);
 
+  // Hardware barcode scanner support (USB / Bluetooth scanners)
+  useEffect(() => {
+    let scanBuffer = '';
+    let lastKeyTime = 0;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if an interactive modal is currently active
+      if (isAddingProduct || editingProduct || viewingProduct || deactivatingProduct) {
+        return;
+      }
+
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const isModal = target.closest('[role="dialog"]') || target.closest('.modal');
+        if (isModal) return;
+
+        // If user is typing in another input (like a select or modal input), ignore
+        const isOtherInput =
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) &&
+          !target.classList.contains('product-search-input');
+        if (isOtherInput && target.tagName === 'TEXTAREA') return;
+      }
+
+      const now = Date.now();
+      // Hardware scanners typically transmit consecutive keystrokes in < 80ms intervals
+      if (now - lastKeyTime > 100) {
+        scanBuffer = '';
+      }
+      lastKeyTime = now;
+
+      if (e.key === 'Enter') {
+        if (scanBuffer.length >= 3) {
+          e.preventDefault();
+          e.stopPropagation();
+          const scanned = scanBuffer.trim();
+          setSearchQuery(scanned);
+          setLastScannedBarcode(scanned);
+        }
+        scanBuffer = '';
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        scanBuffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isAddingProduct, editingProduct, viewingProduct, deactivatingProduct]);
+
+  // Determine if active search query is a barcode search
+  const isBarcodeSearch = useMemo(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) return false;
+    if (lastScannedBarcode && lastScannedBarcode.toLowerCase() === trimmed.toLowerCase()) return true;
+    return /^\d{4,}$/.test(trimmed) || products.some((p) => p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase());
+  }, [searchQuery, lastScannedBarcode, products]);
+
   // Filtered products list
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
-      // Search filter
+      // Search filter (preserves leading zeros and exact strings)
+      const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
-        !searchQuery.trim() ||
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.barcode && p.barcode.toLowerCase().includes(searchQuery.toLowerCase()));
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.sku.toLowerCase().includes(q) ||
+        (p.barcode && p.barcode.toLowerCase().includes(q));
 
       // Category filter
       const matchesCategory =
@@ -192,14 +252,19 @@ export const ProductList: React.FC = () => {
 
         {/* Search & Filter Toolbar */}
         <div className="mt-5 pt-4 border-t border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-          {/* Reusable Search Bar with instant dropdown (reusable in POS checkout) */}
+          {/* Reusable Search Bar with barcode scanning support */}
           <div className="relative flex-1 max-w-lg">
             <ProductSearchBar
               value={searchQuery}
-              onChange={(q) => setSearchQuery(q)}
-              onSelectProduct={(p) => setViewingProduct(p)}
-              showDropdown={true}
-              placeholder='Search by Name, SKU, Barcode, or Category (e.g. "milk")...'
+              onChange={(q) => {
+                setSearchQuery(q);
+                if (!q) setLastScannedBarcode(null);
+              }}
+              onSelectProduct={(p) => {
+                setSearchQuery(p.barcode || p.sku);
+              }}
+              showDropdown={false}
+              placeholder='Search by Name, SKU, or scan Barcode (e.g. "012345678901")...'
             />
           </div>
 

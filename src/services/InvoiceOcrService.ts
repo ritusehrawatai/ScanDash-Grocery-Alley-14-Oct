@@ -1,10 +1,10 @@
 import { createWorker } from 'tesseract.js';
 import crypto from 'crypto';
-import {
+import type {
   InvoiceOcrResult,
   ExtractedField,
   ExtractedInvoiceItem,
-} from '../types/invoice';
+} from '../types/invoice.ts';
 
 const LOW_CONFIDENCE_THRESHOLD = 75; // Values < 75% flagged for manual review
 

@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { type Request, type Response } from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
@@ -6,7 +6,7 @@ import crypto from 'crypto';
 import multer from 'multer';
 import { fileURLToPath } from 'url';
 import Stripe from 'stripe';
-import { invoiceOcrService } from './src/services/InvoiceOcrService';
+import { invoiceOcrService } from './src/services/InvoiceOcrService.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,7 +22,7 @@ process.on('unhandledRejection', (reason) => {
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  const PORT = process.env.APPLET_ID ? 3000 : (Number(process.env.PORT) || 3000);
 
   app.use(
     express.json({
@@ -1390,10 +1390,13 @@ async function startServer() {
 
   // GET /api/products
   app.get('/api/products', (req: Request, res: Response) => {
-    const { search, categoryId, activeOnly } = req.query;
+    const { search, barcode, categoryId, activeOnly } = req.query;
     let list = [...productsStore];
 
-    if (search && typeof search === 'string') {
+    if (barcode && typeof barcode === 'string') {
+      const b = barcode.trim().toLowerCase();
+      list = list.filter((p) => p.barcode && p.barcode.toLowerCase() === b);
+    } else if (search && typeof search === 'string') {
       const q = search.toLowerCase();
       list = list.filter((p) =>
         p.name.toLowerCase().includes(q) ||
@@ -1415,6 +1418,29 @@ async function startServer() {
       success: true,
       message: 'Products retrieved successfully',
       data: list,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // GET /api/products/barcode/:barcode
+  app.get('/api/products/barcode/:barcode', (req: Request, res: Response) => {
+    const rawBarcode = req.params.barcode.trim();
+    const barcodeLower = rawBarcode.toLowerCase();
+    const product = productsStore.find((p) => p.barcode && p.barcode.toLowerCase() === barcodeLower);
+    if (!product) {
+      res.status(404).json({
+        success: false,
+        error: `No product found for this barcode: ${rawBarcode}`,
+        status: 404,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+    res.json({
+      success: true,
+      message: 'Product retrieved successfully by barcode',
+      data: product,
       timestamp: new Date().toISOString(),
     });
   });
@@ -1809,6 +1835,7 @@ async function startServer() {
     productId: number;
     productName: string;
     productSku: string;
+    productBarcode?: string;
     unit: string;
     currentQuantity: number;
     minimumInventoryThreshold: number;
@@ -2157,6 +2184,7 @@ async function startServer() {
         productId: product.id,
         productName: product.name,
         productSku: product.sku,
+        productBarcode: product.barcode || '',
         unit: product.unit,
         currentQuantity: 0.0,
         minimumInventoryThreshold: threshold,
@@ -2165,6 +2193,7 @@ async function startServer() {
       };
       inventoryStore.set(product.id, inv);
     } else {
+      inv.productBarcode = product.barcode || inv.productBarcode || '';
       inv.minimumInventoryThreshold = threshold;
       inv.stockStatus = calculateInventoryStatus(inv.currentQuantity, threshold);
     }
@@ -2175,11 +2204,55 @@ async function startServer() {
   app.get('/api/inventory', (req: Request, res: Response) => {
     // Ensure all products have inventory records
     productsStore.forEach((p) => getOrCreateInventory(p));
-    const list = Array.from(inventoryStore.values());
+    let list = Array.from(inventoryStore.values()).map((inv) => {
+      const prod = productsStore.find((p) => p.id === inv.productId);
+      return {
+        ...inv,
+        productBarcode: prod?.barcode || inv.productBarcode || '',
+      };
+    });
+
+    const search = ((req.query.search as string) || (req.query.q as string) || (req.query.barcode as string) || '').toLowerCase().trim();
+    if (search) {
+      list = list.filter((inv) =>
+        inv.productName.toLowerCase().includes(search) ||
+        inv.productSku.toLowerCase().includes(search) ||
+        (inv.productBarcode && inv.productBarcode.toLowerCase().includes(search))
+      );
+    }
+
     res.json({
       success: true,
       message: 'Inventory retrieved successfully',
       data: list,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // GET /api/inventory/barcode/:barcode
+  app.get('/api/inventory/barcode/:barcode', (req: Request, res: Response) => {
+    const rawBarcode = req.params.barcode.trim();
+    const barcodeLower = rawBarcode.toLowerCase();
+    const product = productsStore.find((p) => p.barcode && p.barcode.toLowerCase() === barcodeLower);
+    if (!product) {
+      res.status(404).json({
+        success: false,
+        error: `Product not found with barcode: ${rawBarcode}`,
+        status: 404,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
+    const inv = getOrCreateInventory(product);
+    res.json({
+      success: true,
+      message: 'Product inventory retrieved successfully',
+      data: {
+        ...inv,
+        productBarcode: product.barcode || '',
+      },
       timestamp: new Date().toISOString(),
     });
   });
@@ -2203,7 +2276,10 @@ async function startServer() {
     res.json({
       success: true,
       message: 'Product inventory retrieved successfully',
-      data: inv,
+      data: {
+        ...inv,
+        productBarcode: product.barcode || '',
+      },
       timestamp: new Date().toISOString(),
     });
   });

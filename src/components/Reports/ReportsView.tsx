@@ -89,7 +89,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ onNavigate }) => {
       setTransactions(txData);
       setInvoices(invoicesData);
     } catch (err) {
-      console.error('Failed to load reporting data:', err);
+      console.warn('Notice: Failed to load reporting data:', err);
     } finally {
       setLoading(false);
       setIsRefreshing(false);

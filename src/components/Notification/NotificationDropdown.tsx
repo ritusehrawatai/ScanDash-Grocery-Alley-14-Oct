@@ -45,7 +45,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         onCountChange(unreadCount);
       }
     } catch (err) {
-      console.error('Failed to load notifications:', err);
+      console.warn('Notice: Failed to load notifications:', err);
     } finally {
       setLoading(false);
     }
@@ -89,7 +89,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         onCountChange(unreadCount);
       }
     } catch (err) {
-      console.error('Failed to mark notification as read:', err);
+      console.warn('Notice: Failed to mark notification as read:', err);
     } finally {
       setMarkingId(null);
     }
@@ -106,7 +106,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({
         onCountChange(0);
       }
     } catch (err) {
-      console.error('Failed to mark all as read:', err);
+      console.warn('Notice: Failed to mark all as read:', err);
     } finally {
       setMarkingAll(false);
     }

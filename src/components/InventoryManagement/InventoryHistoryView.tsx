@@ -67,16 +67,18 @@ export const InventoryHistoryView: React.FC<InventoryHistoryViewProps> = ({
       const matchesType = selectedType === 'all' || tx.transactionType === selectedType;
 
       const q = searchQuery.toLowerCase().trim();
+      const prodBarcode = inventoryItems.find((i) => i.productId === tx.productId)?.productBarcode;
       const matchesSearch =
         !q ||
         tx.productName.toLowerCase().includes(q) ||
         tx.productSku.toLowerCase().includes(q) ||
+        (prodBarcode && prodBarcode.toLowerCase().includes(q)) ||
         (tx.referenceId && tx.referenceId.toLowerCase().includes(q)) ||
         (tx.reason && tx.reason.toLowerCase().includes(q));
 
       return matchesType && matchesSearch;
     });
-  }, [transactions, selectedType, searchQuery]);
+  }, [transactions, selectedType, searchQuery, inventoryItems]);
 
   const getTypeBadge = (type: InventoryTransactionType) => {
     switch (type) {
@@ -183,7 +185,7 @@ export const InventoryHistoryView: React.FC<InventoryHistoryViewProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter by product, SKU, PO or reason..."
+              placeholder="Filter by product, SKU, barcode, PO or reason..."
               className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-md text-xs focus:outline-emerald-600 text-stone-900"
             />
           </div>

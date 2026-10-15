@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus,
   Minus,
@@ -10,14 +10,18 @@ import {
   AlertCircle,
   Package,
   AlertTriangle,
+  Barcode,
+  X,
 } from 'lucide-react';
 import { InventoryItem, StockStatus } from '../../types/inventory';
 import { fetchAllInventory } from '../../api/inventoryApi';
+import { createProduct } from '../../api/productApi';
 import { StockStatusBadge } from './StockStatusBadge';
 import { AddStockModal } from './AddStockModal';
 import { RemoveStockModal } from './RemoveStockModal';
 import { AdjustStockModal } from './AdjustStockModal';
 import { InventoryHistoryView } from './InventoryHistoryView';
+import { ProductFormModal } from '../ProductManagement/ProductFormModal';
 
 export const InventoryList: React.FC = () => {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -27,11 +31,13 @@ export const InventoryList: React.FC = () => {
   // Filters
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | StockStatus>('all');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Modals state
   const [addingStockItem, setAddingStockItem] = useState<InventoryItem | null>(null);
   const [removingStockItem, setRemovingStockItem] = useState<InventoryItem | null>(null);
   const [adjustingStockItem, setAdjustingStockItem] = useState<InventoryItem | null>(null);
+  const [isAddingProduct, setIsAddingProduct] = useState<boolean>(false);
 
   // History sub-view state
   const [viewingHistory, setViewingHistory] = useState<boolean>(false);
@@ -66,14 +72,61 @@ export const InventoryList: React.FC = () => {
     loadInventory();
   }, []);
 
-  // Filtered items
+  // Hardware barcode scanner support (preserves leading zeros and alphanumeric codes)
+  useEffect(() => {
+    let scanBuffer = '';
+    let lastKeyTime = 0;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is inside a modal or focused in another text/number input
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const isModal = target.closest('[role="dialog"]') || target.closest('.modal');
+        if (isModal) return;
+
+        const isOtherInput =
+          (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) &&
+          target !== searchInputRef.current;
+        if (isOtherInput) return;
+      }
+
+      const now = Date.now();
+      // Hardware barcode scanners send keystrokes in rapid succession (< 60ms per character)
+      if (now - lastKeyTime > 100) {
+        scanBuffer = '';
+      }
+      lastKeyTime = now;
+
+      if (e.key === 'Enter') {
+        if (scanBuffer.length >= 2) {
+          e.preventDefault();
+          setSearchQuery(scanBuffer);
+          if (searchInputRef.current) {
+            searchInputRef.current.focus();
+            searchInputRef.current.select();
+          }
+        }
+        scanBuffer = '';
+      } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+        scanBuffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // Filtered items - includes product name, SKU, and barcode alongside status filter
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch =
         !q ||
         item.productName.toLowerCase().includes(q) ||
-        item.productSku.toLowerCase().includes(q);
+        item.productSku.toLowerCase().includes(q) ||
+        (item.productBarcode && item.productBarcode.toLowerCase().includes(q));
 
       const matchesStatus = statusFilter === 'all' || item.stockStatus === statusFilter;
 
@@ -174,6 +227,15 @@ export const InventoryList: React.FC = () => {
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
               <span>Refresh</span>
             </button>
+
+            <button
+              onClick={() => setIsAddingProduct(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-emerald-700 hover:bg-emerald-800 rounded-md transition-colors cursor-pointer shadow-2xs"
+              title="Add New Product to Catalog & Inventory"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Add Product</span>
+            </button>
           </div>
         </div>
 
@@ -210,16 +272,35 @@ export const InventoryList: React.FC = () => {
 
         {/* Search & Filter Toolbar */}
         <div className="mt-4 pt-4 border-t border-stone-200 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-          {/* Search Query */}
-          <div className="relative flex-1 max-w-sm">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          {/* Search Query with manual entry and barcode scanning */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
+              ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter by product name or SKU..."
-              className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-md text-xs focus:outline-emerald-600 text-stone-900"
+              placeholder="Search by product name, SKU, or scan barcode..."
+              className="w-full pl-9 pr-16 py-2 bg-stone-50 border border-stone-200 rounded-md text-xs focus:outline-emerald-600 text-stone-900 placeholder:text-stone-400"
             />
+            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 text-stone-400">
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    searchInputRef.current?.focus();
+                  }}
+                  className="p-0.5 hover:text-stone-600 transition-colors cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              ) : null}
+              <span title="Ready for barcode scanner or manual entry" className="flex items-center gap-0.5 text-stone-400">
+                <Barcode className="w-4 h-4" />
+              </span>
+            </div>
           </div>
 
           {/* Status Filter Segmented Control */}
@@ -291,7 +372,7 @@ export const InventoryList: React.FC = () => {
             <thead>
               <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold uppercase tracking-wider text-[11px]">
                 <th className="py-3 px-4">Product</th>
-                <th className="py-3 px-3">SKU</th>
+                <th className="py-3 px-3">SKU / Barcode</th>
                 <th className="py-3 px-3 text-right">Current Stock</th>
                 <th className="py-3 px-3 text-right">Min. Threshold</th>
                 <th className="py-3 px-3 text-center">Stock Status</th>
@@ -316,7 +397,7 @@ export const InventoryList: React.FC = () => {
                     <p className="font-medium text-stone-700">No inventory records found</p>
                     <p className="text-[11px] text-stone-400 mt-0.5">
                       {searchQuery || statusFilter !== 'all'
-                        ? 'Try clearing your search query or filter'
+                        ? 'Try clearing or adjusting your search query (name, SKU, barcode) or status filter.'
                         : 'Products in your catalog will display here with stock tracking.'}
                     </p>
                   </td>
@@ -329,9 +410,18 @@ export const InventoryList: React.FC = () => {
                       <span title={item.productName}>{item.productName}</span>
                     </td>
 
-                    {/* SKU */}
+                    {/* SKU & Barcode */}
                     <td className="py-3 px-3 font-mono text-stone-600">
-                      {item.productSku}
+                      <div>{item.productSku}</div>
+                      {item.productBarcode && (
+                        <div
+                          className="text-[10px] text-stone-400 font-mono tracking-tight flex items-center gap-1 mt-0.5"
+                          title={`Barcode: ${item.productBarcode}`}
+                        >
+                          <Barcode className="w-3 h-3 text-stone-400 shrink-0" />
+                          <span>{item.productBarcode}</span>
+                        </div>
+                      )}
                     </td>
 
                     {/* Current Stock */}
@@ -457,6 +547,18 @@ export const InventoryList: React.FC = () => {
             loadInventory();
             window.dispatchEvent(new CustomEvent('inventory-changed'));
             showToast(`Adjusted inventory for "${adjustingStockItem.productName}".`);
+          }}
+        />
+      )}
+
+      {isAddingProduct && (
+        <ProductFormModal
+          onClose={() => setIsAddingProduct(false)}
+          onSubmit={async (data) => {
+            const created = await createProduct(data as any);
+            await loadInventory();
+            window.dispatchEvent(new CustomEvent('inventory-changed'));
+            showToast(`Product "${created.name}" created and added to inventory.`);
           }}
         />
       )}

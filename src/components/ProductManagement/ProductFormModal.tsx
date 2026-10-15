@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Save, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Save, AlertCircle, Barcode, Check } from 'lucide-react';
 import { Product, CreateProductInput, UpdateProductInput } from '../../types/product';
 
 interface ProductFormModalProps {
@@ -60,6 +60,83 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
+
+  // Barcode scanning support
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const [justScanned, setJustScanned] = useState<boolean>(false);
+
+  useEffect(() => {
+    let scanBuffer = '';
+    let lastKeyTime = 0;
+    let scanTimer: any = null;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const now = Date.now();
+      const elapsed = now - lastKeyTime;
+      lastKeyTime = now;
+
+      // Scanners typically send Enter or Tab after completing a scan
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        // If a burst of characters arrived rapidly (scanner signature of >= 3 chars)
+        if (scanBuffer.length >= 3) {
+          e.preventDefault();
+          e.stopPropagation();
+          const scannedBarcode = scanBuffer.trim();
+          // Preserve exact barcode value including leading zeros as a string
+          setBarcode(scannedBarcode);
+          setJustScanned(true);
+          setTimeout(() => setJustScanned(false), 2500);
+
+          if (barcodeInputRef.current) {
+            barcodeInputRef.current.focus();
+          }
+          scanBuffer = '';
+          return;
+        }
+
+        // Prevent accidental form submission when scanner or user sends Enter in the barcode field
+        if (document.activeElement === barcodeInputRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
+        scanBuffer = '';
+        return;
+      }
+
+      // Ignore modifier keys
+      if (e.ctrlKey || e.altKey || e.metaKey) {
+        return;
+      }
+
+      // Single printable characters
+      if (e.key.length === 1) {
+        // Keystrokes arriving with interval < 80ms (characteristic of hardware scanners)
+        if (elapsed < 80 || scanBuffer.length > 0) {
+          scanBuffer += e.key;
+
+          // If the user was focused on another field (e.g. name or sku), prevent the rapid scanner characters from dirtying it
+          if (document.activeElement !== barcodeInputRef.current && scanBuffer.length >= 2) {
+            e.preventDefault();
+          }
+        } else {
+          // Initial character of a potential scan
+          scanBuffer = e.key;
+        }
+
+        clearTimeout(scanTimer);
+        scanTimer = setTimeout(() => {
+          scanBuffer = '';
+        }, 120);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+      clearTimeout(scanTimer);
+    };
+  }, []);
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -214,16 +291,37 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
               </div>
 
               <div>
-                <label className="block font-medium text-stone-700 mb-1">
-                  Barcode (UPC / EAN) <span className="text-stone-400 font-normal">(Optional)</span>
-                </label>
-                <input
-                  type="text"
-                  value={barcode}
-                  onChange={(e) => setBarcode(e.target.value)}
-                  placeholder="e.g. 012345678901"
-                  className="w-full font-mono px-3 py-2 border border-stone-300 rounded-md text-xs focus:outline-emerald-600 bg-white"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-medium text-stone-700">
+                    Barcode (UPC / EAN) <span className="text-stone-400 font-normal">(Optional)</span>
+                  </label>
+                  {justScanned && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 animate-in fade-in">
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      <span>Barcode Scanned</span>
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    ref={barcodeInputRef}
+                    type="text"
+                    value={barcode}
+                    onChange={(e) => setBarcode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault(); // Prevent accidental form submission when scanner sends Enter
+                      }
+                    }}
+                    placeholder="e.g. 012345678901 (or scan barcode)"
+                    className={`w-full font-mono pl-3 pr-9 py-2 border rounded-md text-xs focus:outline-emerald-600 bg-white transition-colors ${
+                      justScanned ? 'border-emerald-500 ring-2 ring-emerald-100' : 'border-stone-300'
+                    }`}
+                  />
+                  <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-stone-400">
+                    <Barcode className="w-4 h-4" />
+                  </div>
+                </div>
               </div>
             </div>
 

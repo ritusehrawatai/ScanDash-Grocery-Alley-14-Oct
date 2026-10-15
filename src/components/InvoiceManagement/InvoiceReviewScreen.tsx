@@ -695,7 +695,7 @@ export const InvoiceReviewScreen: React.FC<InvoiceReviewScreenProps> = ({
       onInvoiceUpdated(updatedInvoice);
       showAlert('success', 'Review draft saved successfully. Inventory remains completely unchanged.');
     } catch (err: any) {
-      console.error('Failed to save review draft:', err);
+      console.warn('Notice: Failed to save review draft:', err);
       showAlert('error', err.message || 'Failed to save review draft.');
     } finally {
       setIsSavingDraft(false);
@@ -755,7 +755,7 @@ export const InvoiceReviewScreen: React.FC<InvoiceReviewScreenProps> = ({
         `Invoice ${result.invoice.invoiceNumber} explicitly confirmed via database transaction! Created ${result.createdInvoiceItems?.length || 0} invoice items and updated ${result.inventoryUpdates.length} stock balances.`
       );
     } catch (err: any) {
-      console.error('Failed to confirm invoice:', err);
+      console.warn('Notice: Failed to confirm invoice:', err);
       showAlert(
         'error',
         err.message || 'Failed to confirm invoice. Database transaction was rolled back cleanly.'

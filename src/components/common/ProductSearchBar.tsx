@@ -69,7 +69,7 @@ export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
           setIsOpen(true);
         }
       } catch (err) {
-        console.error('Product search error:', err);
+        console.warn('Notice: Product search issue:', err);
       } finally {
         setLoading(false);
       }
@@ -172,19 +172,24 @@ export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
           }}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className="w-full pl-9 pr-9 py-2 bg-stone-50 border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-emerald-600 focus:bg-white transition-colors"
+          className="w-full pl-9 pr-16 py-2 bg-stone-50 border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-emerald-600 focus:bg-white transition-colors"
         />
 
-        {currentQuery && (
-          <button
-            type="button"
-            onClick={handleClear}
-            className="absolute right-2.5 p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-200/50 rounded-full transition-colors cursor-pointer"
-            title="Clear search query"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        )}
+        <div className="absolute right-2.5 flex items-center gap-1.5 text-stone-400">
+          {currentQuery && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="p-1 text-stone-400 hover:text-stone-700 hover:bg-stone-200/50 rounded-full transition-colors cursor-pointer"
+              title="Clear search query"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <span title="Ready for barcode scanner or manual entry">
+            <BarcodeIcon className="w-4 h-4 text-stone-400" />
+          </span>
+        </div>
       </div>
 
       {/* Dropdown Popover Results for POS / Quick Select */}

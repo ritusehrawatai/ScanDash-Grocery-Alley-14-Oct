@@ -74,7 +74,7 @@ export const ProductSearchCatalog: React.FC<ProductSearchCatalogProps> = ({ onAd
         setProducts(all);
       }
     } catch (err) {
-      console.error('Failed to load products:', err);
+      console.warn('Notice: Failed to load products:', err);
     } finally {
       setLoading(false);
     }
@@ -186,7 +186,7 @@ export const ProductSearchCatalog: React.FC<ProductSearchCatalogProps> = ({ onAd
       recognitionRef.current = recognition;
       recognition.start();
     } catch (err) {
-      console.error('Failed to start speech recognition:', err);
+      console.warn('Notice: Speech recognition unavailable:', err);
       setIsListening(false);
       setVoiceFeedback({
         transcript: '',

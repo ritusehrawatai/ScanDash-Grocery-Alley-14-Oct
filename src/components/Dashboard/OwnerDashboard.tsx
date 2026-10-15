@@ -80,6 +80,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate }) =>
     setError(null);
 
     try {
+      const failedResources: string[] = [];
       const [
         salesData,
         productsData,
@@ -89,27 +90,33 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate }) =>
         notificationsData,
       ] = await Promise.all([
         fetchAllSales().catch((err) => {
-          console.error('Failed to fetch sales:', err);
+          failedResources.push('sales');
+          console.warn('Dashboard notice: sales fetch deferred:', err?.message || err);
           return [] as SaleDto[];
         }),
         fetchProducts().catch((err) => {
-          console.error('Failed to fetch products:', err);
+          failedResources.push('products');
+          console.warn('Dashboard notice: products fetch deferred:', err?.message || err);
           return [] as Product[];
         }),
         fetchAllInventory().catch((err) => {
-          console.error('Failed to fetch inventory:', err);
+          failedResources.push('inventory');
+          console.warn('Dashboard notice: inventory fetch deferred:', err?.message || err);
           return [] as InventoryItem[];
         }),
         fetchInventoryTransactions().catch((err) => {
-          console.error('Failed to fetch inventory transactions:', err);
+          failedResources.push('transactions');
+          console.warn('Dashboard notice: transactions fetch deferred:', err?.message || err);
           return [] as InventoryTransactionItem[];
         }),
         fetchInvoices().catch((err) => {
-          console.error('Failed to fetch invoices:', err);
+          failedResources.push('invoices');
+          console.warn('Dashboard notice: invoices fetch deferred:', err?.message || err);
           return [] as PurchaseInvoice[];
         }),
         fetchNotifications().catch((err) => {
-          console.error('Failed to fetch notifications:', err);
+          failedResources.push('notifications');
+          console.warn('Dashboard notice: notifications fetch deferred:', err?.message || err);
           return [] as NotificationItem[];
         }),
       ]);
@@ -121,8 +128,12 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate }) =>
       setInvoices(invoicesData);
       setNotifications(notificationsData);
       setLastRefreshed(new Date());
+
+      if (failedResources.length > 0) {
+        setError(`Some dashboard metrics could not be loaded (${failedResources.join(', ')}). Click Refresh to retry.`);
+      }
     } catch (err: any) {
-      console.error('Dashboard data load failed:', err);
+      console.warn('Dashboard data load issue:', err?.message || err);
       setError(err?.message || 'Failed to refresh dashboard metrics');
     } finally {
       setLoading(false);
@@ -160,7 +171,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate }) =>
       );
       window.dispatchEvent(new CustomEvent('notification-refresh'));
     } catch (err) {
-      console.error('Failed to mark notification read:', err);
+      console.warn('Notification read update notice:', err);
     }
   };
 
@@ -171,7 +182,7 @@ export const OwnerDashboard: React.FC<OwnerDashboardProps> = ({ onNavigate }) =>
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
       window.dispatchEvent(new CustomEvent('notification-refresh'));
     } catch (err) {
-      console.error('Failed to mark all notifications read:', err);
+      console.warn('All notifications read update notice:', err);
     }
   };
 

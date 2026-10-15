@@ -1,8 +1,7 @@
 import { Product, CreateProductInput, UpdateProductInput } from '../types/product';
 import { ApiResponse } from '../types/health';
 import { authFetch } from '../utils/authStorage';
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { BASE_URL } from './baseUrl';
 
 export class ApiError extends Error {
   status: number;
@@ -96,6 +95,19 @@ export async function fetchProductById(id: number): Promise<Product> {
     headers: { Accept: 'application/json' },
   });
   return handleResponse<Product>(res);
+}
+
+export async function fetchProductByBarcode(barcode: string): Promise<Product | null> {
+  const cleanBarcode = barcode.trim();
+  try {
+    const res = await authFetch(`${BASE_URL}/api/products/barcode/${encodeURIComponent(cleanBarcode)}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (res.status === 404) return null;
+    return handleResponse<Product>(res);
+  } catch {
+    return null;
+  }
 }
 
 export async function createProduct(input: CreateProductInput): Promise<Product> {

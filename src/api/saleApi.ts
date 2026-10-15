@@ -1,7 +1,6 @@
 import { SaleDto, CreateSalePayload } from '../types/sale';
 import { authFetch } from '../utils/authStorage';
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { BASE_URL } from './baseUrl';
 
 export class SaleApiError extends Error {
   status: number;

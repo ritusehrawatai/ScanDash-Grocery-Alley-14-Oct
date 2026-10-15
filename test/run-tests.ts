@@ -210,6 +210,43 @@ async function main() {
     );
   });
 
+  await runTest('Product', 'Create product with scanned barcode preserving leading zeros', async () => {
+    const leadingZeroBarcode = `00${Date.now().toString().slice(-10)}`;
+    const res = await fetch(`${BASE_URL}/api/products`, {
+      method: 'POST',
+      headers: ownerHeaders,
+      body: JSON.stringify({
+        name: `Scanned Barcode Product ${testSuffix}`,
+        sku: `SKU-SCAN-${testSuffix}`,
+        barcode: leadingZeroBarcode, // e.g. '001234567890'
+        purchasePrice: 2.5,
+        sellingPrice: 4.99,
+        taxRate: 0.05,
+        unit: 'PCS',
+        minimumInventoryThreshold: 5,
+        active: true,
+      }),
+    });
+
+    assertEqual(res.status, 201, 'Creation with leading-zero barcode must return 201');
+    const json = await res.json();
+    assertEqual(json.data.barcode, leadingZeroBarcode, 'Barcode must preserve exact string including leading zeros');
+  });
+
+  await runTest('Product', 'Reject product creation when required fields (name, sku) are missing', async () => {
+    const res = await fetch(`${BASE_URL}/api/products`, {
+      method: 'POST',
+      headers: ownerHeaders,
+      body: JSON.stringify({
+        name: '', // Empty name
+        sku: '',  // Empty SKU
+        barcode: '012345678901',
+      }),
+    });
+
+    assertEqual(res.status, 400, 'Missing required fields must return HTTP 400');
+  });
+
   // ==========================================
   // SUITE 2: INVENTORY MANAGEMENT
   // ==========================================
@@ -334,6 +371,58 @@ async function main() {
       quantity: 50,
       reason: 'Restock for POS tests',
     }),
+  });
+
+  await runTest('Inventory Search', 'Search inventory by exact barcode (preserves leading zeros)', async () => {
+    // Product 1 has barcode '012345678901' with leading zero
+    const res = await fetch(`${BASE_URL}/api/inventory?barcode=012345678901`, {
+      headers: ownerHeaders,
+    });
+    assertEqual(res.status, 200, 'Search by barcode must return HTTP 200');
+    const json = await res.json();
+    assert(Array.isArray(json.data), 'Data must be an array');
+    assertEqual(json.data.length, 1, 'Must find exactly 1 product matching barcode');
+    assertEqual(json.data[0].productBarcode, '012345678901', 'Barcode must match and preserve leading zero');
+    assertEqual(json.data[0].productId, 1, 'Must match product ID 1');
+  });
+
+  await runTest('Inventory Search', 'Direct barcode lookup endpoint (/api/inventory/barcode/:barcode)', async () => {
+    const res = await fetch(`${BASE_URL}/api/inventory/barcode/012345678901`, {
+      headers: ownerHeaders,
+    });
+    assertEqual(res.status, 200, 'Direct barcode lookup must return HTTP 200');
+    const json = await res.json();
+    assertEqual(json.data.productId, 1, 'Must match product ID 1');
+    assertEqual(json.data.productBarcode, '012345678901', 'Must return barcode');
+  });
+
+  await runTest('Inventory Search', 'Non-existent barcode search returns no results and does NOT create products', async () => {
+    const beforeRes = await fetch(`${BASE_URL}/api/inventory`, { headers: ownerHeaders });
+    const beforeJson = await beforeRes.json();
+    const countBefore = beforeJson.data.length;
+
+    const res = await fetch(`${BASE_URL}/api/inventory?barcode=NONEXISTENT_BARCODE_999999`, {
+      headers: ownerHeaders,
+    });
+    assertEqual(res.status, 200, 'Search query returns 200 with empty array');
+    const json = await res.json();
+    assertEqual(json.data.length, 0, 'No products must match non-existent barcode');
+
+    const afterRes = await fetch(`${BASE_URL}/api/inventory`, { headers: ownerHeaders });
+    const afterJson = await afterRes.json();
+    assertEqual(afterJson.data.length, countBefore, 'Product count must remain unchanged (no duplicate or phantom creation)');
+  });
+
+  await runTest('Inventory Search', 'Existing search criteria (Name and SKU) continue to work identically', async () => {
+    // Search by product name
+    const nameRes = await fetch(`${BASE_URL}/api/inventory?search=Bananas`, { headers: ownerHeaders });
+    const nameJson = await nameRes.json();
+    assert(nameJson.data.some((i: any) => i.productId === 1), 'Search by name must find Bananas');
+
+    // Search by SKU
+    const skuRes = await fetch(`${BASE_URL}/api/inventory?search=SKU-BAN-001`, { headers: ownerHeaders });
+    const skuJson = await skuRes.json();
+    assert(skuJson.data.some((i: any) => i.productId === 1), 'Search by SKU must find Bananas');
   });
 
   // ==========================================

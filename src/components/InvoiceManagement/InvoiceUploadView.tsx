@@ -81,7 +81,7 @@ export const InvoiceUploadView: React.FC = () => {
       const data = await fetchInvoices();
       setInvoices(data);
     } catch (err: any) {
-      console.error('Failed to load invoices:', err);
+      console.warn('Notice: Failed to load invoices:', err);
       showAlert('error', err.message || 'Failed to load purchase invoices.');
     } finally {
       setLoading(false);
@@ -246,7 +246,7 @@ export const InvoiceUploadView: React.FC = () => {
       }
       await loadInvoices();
     } catch (err: any) {
-      console.error('Upload error:', err);
+      console.warn('Upload issue:', err);
       showAlert('error', err.message || 'Upload rejected by server.');
     } finally {
       setUploading(false);
@@ -274,7 +274,7 @@ export const InvoiceUploadView: React.FC = () => {
         setActiveTab('ocr');
       }
     } catch (err: any) {
-      console.error('OCR processing error:', err);
+      console.warn('OCR processing notice:', err);
       showAlert('error', err.message || 'Failed to process invoice OCR.');
     } finally {
       setProcessingOcrId(null);

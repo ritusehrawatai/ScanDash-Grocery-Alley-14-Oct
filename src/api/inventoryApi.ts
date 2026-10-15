@@ -8,8 +8,7 @@ import {
 } from '../types/inventory';
 import { fetchProducts } from './productApi';
 import { authFetch } from '../utils/authStorage';
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+import { BASE_URL } from './baseUrl';
 
 export class InventoryApiError extends Error {
   status: number;
@@ -92,6 +91,7 @@ export async function fetchAllInventory(): Promise<InventoryItem[]> {
       productId: item.productId,
       productName: item.productName || prod?.name || `Product #${item.productId}`,
       productSku: item.productSku || prod?.sku || 'N/A',
+      productBarcode: item.productBarcode || prod?.barcode || '',
       unit: item.unit || prod?.unit || 'PCS',
       currentQuantity: currentQty,
       minimumInventoryThreshold: threshold,
@@ -122,6 +122,7 @@ export async function fetchProductInventory(productId: number): Promise<Inventor
     productId: inv.productId,
     productName: inv.productName || prod?.name || `Product #${inv.productId}`,
     productSku: inv.productSku || prod?.sku || 'N/A',
+    productBarcode: inv.productBarcode || prod?.barcode || '',
     unit: inv.unit || prod?.unit || 'PCS',
     currentQuantity: currentQty,
     minimumInventoryThreshold: threshold,

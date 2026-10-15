@@ -75,6 +75,7 @@ export function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise
   const mergedHeaders = authStorage.getAuthHeaders(customHeaders);
 
   return fetch(input, {
+    credentials: 'include',
     ...init,
     headers: mergedHeaders,
   });

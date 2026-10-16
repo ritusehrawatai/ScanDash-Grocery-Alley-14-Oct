@@ -1388,8 +1388,8 @@ async function startServer() {
     });
   });
 
-  // GET /api/products
-  app.get('/api/products', (req: Request, res: Response) => {
+  // GET /api/products & /api/v1/products
+  app.get(['/api/products', '/api/v1/products'], (req: Request, res: Response) => {
     const { search, barcode, categoryId, activeOnly } = req.query;
     let list = [...productsStore];
 
@@ -1422,8 +1422,8 @@ async function startServer() {
     });
   });
 
-  // GET /api/products/barcode/:barcode
-  app.get('/api/products/barcode/:barcode', (req: Request, res: Response) => {
+  // GET /api/products/barcode/:barcode & /api/v1/products/barcode/:barcode
+  app.get(['/api/products/barcode/:barcode', '/api/v1/products/barcode/:barcode'], (req: Request, res: Response) => {
     const rawBarcode = req.params.barcode.trim();
     const barcodeLower = rawBarcode.toLowerCase();
     const product = productsStore.find((p) => p.barcode && p.barcode.toLowerCase() === barcodeLower);
@@ -1445,8 +1445,8 @@ async function startServer() {
     });
   });
 
-  // GET /api/products/search?q={query}
-  app.get('/api/products/search', (req: Request, res: Response) => {
+  // GET /api/products/search?q={query} & /api/v1/products/search?q={query}
+  app.get(['/api/products/search', '/api/v1/products/search'], (req: Request, res: Response) => {
     const q = req.query.q !== undefined ? String(req.query.q).trim().toLowerCase() : '';
     const activeOnly = req.query.activeOnly === 'true';
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus,
   RefreshCw,
@@ -8,10 +8,13 @@ import {
   CheckCircle2,
   AlertCircle,
   Package,
+  Barcode as BarcodeIcon,
+  X,
 } from 'lucide-react';
 import { Product, CreateProductInput, UpdateProductInput } from '../../types/product';
 import {
   fetchProducts,
+  fetchProductByBarcode,
   createProduct,
   updateProduct,
   toggleProductActive,
@@ -68,6 +71,43 @@ export const ProductList: React.FC = () => {
     loadProducts();
   }, []);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Background lookup for barcodes not present in initial load
+  const checkAndLoadBarcode = async (scannedBarcode: string) => {
+    const clean = scannedBarcode.trim();
+    if (!clean) return;
+    const existsLocally = products.some(
+      (p) => p.barcode && p.barcode.toLowerCase() === clean.toLowerCase()
+    );
+    if (!existsLocally) {
+      try {
+        const remoteProduct = await fetchProductByBarcode(clean);
+        if (remoteProduct) {
+          setProducts((prev) => {
+            if (prev.some((p) => p.id === remoteProduct.id)) return prev;
+            return [remoteProduct, ...prev];
+          });
+        }
+      } catch {
+        // Product not in remote store either; "No product found for this barcode." will display
+      }
+    }
+  };
+
+  const handleSearchSubmit = async (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    const isBarcodeLike =
+      /^\d{4,}$/.test(trimmed) ||
+      /^(BAR|BC|UPC|EAN)-/i.test(trimmed) ||
+      products.some((p) => p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase());
+    if (isBarcodeLike) {
+      setLastScannedBarcode(trimmed);
+      await checkAndLoadBarcode(trimmed);
+    }
+  };
+
   // Hardware barcode scanner support (USB / Bluetooth scanners)
   useEffect(() => {
     let scanBuffer = '';
@@ -87,24 +127,30 @@ export const ProductList: React.FC = () => {
         // If user is typing in another input (like a select or modal input), ignore
         const isOtherInput =
           (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) &&
-          !target.classList.contains('product-search-input');
+          !target.classList.contains('product-search-input') &&
+          target !== searchInputRef.current;
         if (isOtherInput && target.tagName === 'TEXTAREA') return;
       }
 
       const now = Date.now();
-      // Hardware scanners typically transmit consecutive keystrokes in < 80ms intervals
+      // Hardware scanners typically transmit consecutive keystrokes in < 90ms intervals
       if (now - lastKeyTime > 100) {
         scanBuffer = '';
       }
       lastKeyTime = now;
 
-      if (e.key === 'Enter') {
-        if (scanBuffer.length >= 3) {
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        if (scanBuffer.length >= 2) {
           e.preventDefault();
           e.stopPropagation();
           const scanned = scanBuffer.trim();
           setSearchQuery(scanned);
           setLastScannedBarcode(scanned);
+          if (searchInputRef.current) {
+            searchInputRef.current.focus();
+            searchInputRef.current.select();
+          }
+          checkAndLoadBarcode(scanned);
         }
         scanBuffer = '';
       } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -116,14 +162,18 @@ export const ProductList: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isAddingProduct, editingProduct, viewingProduct, deactivatingProduct]);
+  }, [isAddingProduct, editingProduct, viewingProduct, deactivatingProduct, products]);
 
   // Determine if active search query is a barcode search
   const isBarcodeSearch = useMemo(() => {
     const trimmed = searchQuery.trim();
     if (!trimmed) return false;
     if (lastScannedBarcode && lastScannedBarcode.toLowerCase() === trimmed.toLowerCase()) return true;
-    return /^\d{4,}$/.test(trimmed) || products.some((p) => p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase());
+    return (
+      /^\d{4,}$/.test(trimmed) ||
+      /^(BAR|BC|UPC|EAN)-/i.test(trimmed) ||
+      products.some((p) => p.barcode && p.barcode.toLowerCase() === trimmed.toLowerCase())
+    );
   }, [searchQuery, lastScannedBarcode, products]);
 
   // Filtered products list
@@ -255,11 +305,13 @@ export const ProductList: React.FC = () => {
           {/* Reusable Search Bar with barcode scanning support */}
           <div className="relative flex-1 max-w-lg">
             <ProductSearchBar
+              inputRef={searchInputRef}
               value={searchQuery}
               onChange={(q) => {
                 setSearchQuery(q);
                 if (!q) setLastScannedBarcode(null);
               }}
+              onSearch={handleSearchSubmit}
               onSelectProduct={(p) => {
                 setSearchQuery(p.barcode || p.sku);
               }}
@@ -322,6 +374,32 @@ export const ProductList: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Scanned Barcode Active Status Banner */}
+        {lastScannedBarcode && (
+          <div className="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-md flex items-center justify-between text-xs text-emerald-900 animate-in fade-in duration-150">
+            <div className="flex items-center gap-2">
+              <BarcodeIcon className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span>
+                Active Barcode Scan: <strong className="font-mono text-emerald-950 font-bold">{lastScannedBarcode}</strong>
+              </span>
+              <span className="text-[11px] text-emerald-700">
+                ({filteredProducts.length > 0 ? `${filteredProducts.length} matching product found` : 'No match found'})
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setLastScannedBarcode(null);
+              }}
+              className="px-2 py-0.5 bg-white border border-emerald-300 hover:bg-emerald-100 rounded text-[11px] font-medium text-emerald-800 transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <X className="w-3 h-3" />
+              <span>Clear Barcode</span>
+            </button>
+          </div>
+        )}
 
         {/* Quick Search Keyword Suggestions */}
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-stone-500">
@@ -398,12 +476,54 @@ export const ProductList: React.FC = () => {
                 <tr>
                   <td colSpan={12} className="py-12 text-center text-stone-500">
                     <Package className="w-8 h-8 text-stone-300 mx-auto mb-2" />
-                    <p className="font-medium text-stone-700">No products found</p>
-                    <p className="text-[11px] text-stone-400 mt-0.5">
-                      {searchQuery || selectedCategory !== 'all' || statusFilter !== 'all'
-                        ? 'Try clearing your search query or filters'
-                        : 'Get started by clicking "Add Product" above'}
+                    <p className="font-medium text-stone-700">
+                      {isBarcodeSearch
+                        ? 'No product found for this barcode.'
+                        : 'No products found'}
                     </p>
+                    <p className="text-[11px] text-stone-400 mt-1 max-w-md mx-auto">
+                      {isBarcodeSearch ? (
+                        <>
+                          <span>No product in the catalog matches barcode </span>
+                          <span className="font-mono text-stone-600 font-semibold">&quot;{searchQuery}&quot;</span>.
+                          {products.some((p) => p.barcode && p.barcode.toLowerCase() === searchQuery.trim().toLowerCase()) && (
+                            <span className="block mt-1 text-amber-600">
+                              (A product with this barcode exists, but is hidden by the active category or status filter)
+                            </span>
+                          )}
+                        </>
+                      ) : searchQuery || selectedCategory !== 'all' || statusFilter !== 'all' ? (
+                        'Try clearing your search query or filters'
+                      ) : (
+                        'Get started by clicking "Add Product" above'
+                      )}
+                    </p>
+                    {isBarcodeSearch && (
+                      <div className="mt-3 flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSearchQuery('');
+                            setLastScannedBarcode(null);
+                          }}
+                          className="px-2.5 py-1 text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded transition-colors cursor-pointer"
+                        >
+                          Clear search
+                        </button>
+                        {products.some((p) => p.barcode && p.barcode.toLowerCase() === searchQuery.trim().toLowerCase()) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedCategory('all');
+                              setStatusFilter('all');
+                            }}
+                            className="px-2.5 py-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded transition-colors cursor-pointer"
+                          >
+                            Reset filters
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ) : (

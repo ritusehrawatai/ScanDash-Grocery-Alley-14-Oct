@@ -233,6 +233,42 @@ async function main() {
     assertEqual(json.data.barcode, leadingZeroBarcode, 'Barcode must preserve exact string including leading zeros');
   });
 
+  await runTest('Product', 'Retrieve product by barcode with leading zero preservation', async () => {
+    const res = await fetch(`${BASE_URL}/api/products/barcode/012345678901`, {
+      headers: cashierHeaders,
+    });
+
+    const json = await res.json();
+    assertEqual(res.status, 200, 'Barcode lookup must return HTTP 200 OK');
+    assert(json.success, 'Response success must be true');
+    assertEqual(json.data.barcode, '012345678901', 'Retrieved product barcode must match exact string with leading zero');
+    assertEqual(json.data.name, 'Organic Cavendish Bananas', 'Product name must match');
+  });
+
+  await runTest('Product', 'Search products by barcode using general search endpoint', async () => {
+    const res = await fetch(`${BASE_URL}/api/products/search?q=012345678901`, {
+      headers: cashierHeaders,
+    });
+
+    const json = await res.json();
+    assertEqual(res.status, 200, 'Search by barcode must return HTTP 200 OK');
+    assert(Array.isArray(json.data), 'Data must be an array');
+    assert(json.data.length > 0, 'Barcode search must return at least one result');
+    assertEqual(json.data[0].barcode, '012345678901', 'First match barcode must match query');
+  });
+
+  await runTest('Product', 'Return 404 for nonexistent barcode lookup with clear message', async () => {
+    const nonExistentBarcode = '99999999999999';
+    const res = await fetch(`${BASE_URL}/api/products/barcode/${nonExistentBarcode}`, {
+      headers: cashierHeaders,
+    });
+
+    assertEqual(res.status, 404, 'Nonexistent barcode must return HTTP 404');
+    const json = await res.json();
+    assert(!json.success, 'Success must be false for nonexistent barcode');
+    assert(json.error.includes('No product found for this barcode'), 'Error message must say No product found for this barcode');
+  });
+
   await runTest('Product', 'Reject product creation when required fields (name, sku) are missing', async () => {
     const res = await fetch(`${BASE_URL}/api/products`, {
       method: 'POST',

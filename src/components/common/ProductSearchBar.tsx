@@ -11,8 +11,10 @@ export interface ProductSearchBarProps {
   onChange?: (query: string) => void;
   onSearchResults?: (results: Product[]) => void;
   onSelectProduct?: (product: Product) => void;
+  onSearch?: (query: string) => void;
   showDropdown?: boolean;
   className?: string;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
 }
 
 export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
@@ -23,8 +25,10 @@ export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
   onChange,
   onSearchResults,
   onSelectProduct,
+  onSearch,
   showDropdown = false,
   className = '',
+  inputRef: externalInputRef,
 }) => {
   const [internalQuery, setInternalQuery] = useState<string>(controlledValue || '');
   const [results, setResults] = useState<Product[]>([]);
@@ -33,7 +37,8 @@ export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const localInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = externalInputRef || localInputRef;
 
   const currentQuery = controlledValue !== undefined ? controlledValue : internalQuery;
 
@@ -117,8 +122,23 @@ export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
     setIsOpen(false);
   };
 
-  // Keyboard navigation for POS speed
+  // Keyboard navigation and Enter execution for scanners & search
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (onSearch) {
+        onSearch(currentQuery);
+      }
+      if (isOpen && results.length > 0) {
+        if (selectedIndex >= 0 && selectedIndex < results.length) {
+          handleSelect(results[selectedIndex]);
+        } else if (results.length === 1) {
+          handleSelect(results[0]);
+        }
+      }
+      return;
+    }
+
     if (!isOpen || results.length === 0) {
       if (e.key === 'ArrowDown' && results.length > 0) {
         setIsOpen(true);
@@ -134,14 +154,6 @@ export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelectedIndex((prev) => (prev > 0 ? prev - 1 : results.length - 1));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (selectedIndex >= 0 && selectedIndex < results.length) {
-        handleSelect(results[selectedIndex]);
-      } else if (results.length === 1) {
-        // Quick barcode scan or exact 1-match enter
-        handleSelect(results[0]);
-      }
     } else if (e.key === 'Escape') {
       setIsOpen(false);
     }
@@ -172,7 +184,7 @@ export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
           }}
           placeholder={placeholder}
           autoFocus={autoFocus}
-          className="w-full pl-9 pr-16 py-2 bg-stone-50 border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-emerald-600 focus:bg-white transition-colors"
+          className="product-search-input w-full pl-9 pr-16 py-2 bg-stone-50 border border-stone-200 rounded-md text-xs text-stone-900 placeholder:text-stone-400 focus:outline-emerald-600 focus:bg-white transition-colors"
         />
 
         <div className="absolute right-2.5 flex items-center gap-1.5 text-stone-400">

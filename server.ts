@@ -664,6 +664,11 @@ async function startServer() {
       (method === 'POST' || method === 'PUT' || method === 'DELETE') &&
       !path.includes('voice-search');
 
+    // - Categories mutation: POST, PUT, DELETE, PATCH /api/categories
+    const isCategoryMutation =
+      (path.startsWith('/api/categories') || path.startsWith('/api/v1/categories')) &&
+      (method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH');
+
     // - Inventory adjustments, purchases, audits, thresholds
     const isInventoryManagement =
       path.startsWith('/api/inventory') || path.startsWith('/api/v1/inventory');
@@ -694,6 +699,7 @@ async function startServer() {
 
     if (
       isProductMutation ||
+      isCategoryMutation ||
       isInventoryManagement ||
       isInvoiceManagement ||
       isReportsManagement ||
@@ -1127,13 +1133,85 @@ async function startServer() {
   });
 
   // ==========================================
-  // Product REST API Endpoints
-  // POST   /api/products
-  // GET    /api/products
-  // GET    /api/products/:id
-  // PUT    /api/products/:id
-  // DELETE /api/products/:id
+  // Product Category & Product Data Models
   // ==========================================
+
+  interface CategoryRecord {
+    id: number;
+    name: string;
+    description: string | null;
+    active: boolean;
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  let nextCategoryId = 9;
+  const categoriesStore: CategoryRecord[] = [
+    {
+      id: 1,
+      name: 'Produce',
+      description: 'Fresh organic and locally-sourced fruits and vegetables',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 2,
+      name: 'Dairy',
+      description: 'Grade A milk, cream, cheeses, and butter products',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 3,
+      name: 'Bakery',
+      description: 'Fresh artisan breads, pastries, rolls, and baked goods',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 4,
+      name: 'Beverages',
+      description: 'Fruit juices, sodas, sparkling water, and cold drinks',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 5,
+      name: 'Meat & Seafood',
+      description: 'Fresh cuts of beef, poultry, pork, and sustainable seafood',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 6,
+      name: 'Pantry & Dry Goods',
+      description: 'Grains, pasta, cooking oils, spices, and shelf-stable goods',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 7,
+      name: 'Snacks & Confectionery',
+      description: 'Chips, pretzels, crackers, chocolates, and sweets',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+    {
+      id: 8,
+      name: 'Frozen Foods',
+      description: 'Frozen ready meals, ice cream, and frozen vegetables',
+      active: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ];
 
   interface ProductRecord {
     id: number;
@@ -1302,8 +1380,343 @@ async function startServer() {
     return null;
   }
 
+  // ==========================================
+  // Product Category REST API Endpoints
+  // GET    /api/categories & /api/v1/categories
+  // GET    /api/categories/:id & /api/v1/categories/:id
+  // POST   /api/categories & /api/v1/categories
+  // PUT    /api/categories/:id & /api/v1/categories/:id
+  // PATCH  /api/categories/:id/active & /api/v1/categories/:id/active
+  // DELETE /api/categories/:id & /api/v1/categories/:id
+  // ==========================================
+
+  // GET /api/categories & /api/v1/categories
+  app.get(['/api/categories', '/api/v1/categories'], (req: Request, res: Response) => {
+    const { activeOnly, search } = req.query;
+    let list = categoriesStore.map((cat) => {
+      const productCount = productsStore.filter((p) => p.categoryId === cat.id).length;
+      return {
+        ...cat,
+        productCount,
+      };
+    });
+
+    if (activeOnly === 'true') {
+      list = list.filter((c) => c.active);
+    }
+
+    if (search && typeof search === 'string') {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          (c.description && c.description.toLowerCase().includes(q))
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Categories retrieved successfully',
+      data: list,
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // GET /api/categories/:id & /api/v1/categories/:id
+  app.get(['/api/categories/:id([0-9]+)', '/api/v1/categories/:id([0-9]+)'], (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    const cat = categoriesStore.find((c) => c.id === id);
+    if (!cat) {
+      return res.status(404).json({
+        success: false,
+        error: `Category with ID ${id} not found`,
+        status: 404,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const productCount = productsStore.filter((p) => p.categoryId === cat.id).length;
+
+    res.json({
+      success: true,
+      message: 'Category retrieved successfully',
+      data: {
+        ...cat,
+        productCount,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // POST /api/categories & /api/v1/categories
+  app.post(['/api/categories', '/api/v1/categories'], (req: Request, res: Response) => {
+    const { name, description, active } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Category name is required and cannot be empty.',
+        status: 400,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+        details: ['Category name is required'],
+      });
+    }
+
+    const trimmedName = name.trim();
+
+    // Check duplicate category name (case-insensitive and trimmed)
+    const duplicate = categoriesStore.find(
+      (c) => c.name.trim().toLowerCase() === trimmedName.toLowerCase()
+    );
+    if (duplicate) {
+      return res.status(409).json({
+        success: false,
+        error: `A category named '${trimmedName}' already exists.`,
+        status: 409,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+        details: ['Unique constraint conflict: category name'],
+      });
+    }
+
+    const newCategory: CategoryRecord = {
+      id: nextCategoryId++,
+      name: trimmedName,
+      description:
+        description && typeof description === 'string' && description.trim() !== ''
+          ? description.trim()
+          : null,
+      active: active !== undefined ? Boolean(active) : true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    categoriesStore.push(newCategory);
+
+    recordAuditLog({
+      req,
+      action: 'CATEGORY_CREATED',
+      entity: 'CATEGORY',
+      entityId: newCategory.id,
+      details: `Category '${newCategory.name}' created`,
+      newValue: newCategory,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Category created successfully',
+      data: {
+        ...newCategory,
+        productCount: 0,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // PUT /api/categories/:id & /api/v1/categories/:id
+  app.put(['/api/categories/:id([0-9]+)', '/api/v1/categories/:id([0-9]+)'], (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    const index = categoriesStore.findIndex((c) => c.id === id);
+    if (index === -1) {
+      return res.status(404).json({
+        success: false,
+        error: `Category with ID ${id} not found`,
+        status: 404,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const existing = categoriesStore[index];
+    const { name, description, active } = req.body;
+
+    let updatedName = existing.name;
+    if (name !== undefined) {
+      if (typeof name !== 'string' || name.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          error: 'Category name cannot be empty.',
+          status: 400,
+          path: req.originalUrl,
+          timestamp: new Date().toISOString(),
+          details: ['Category name cannot be empty'],
+        });
+      }
+      const trimmed = name.trim();
+      const duplicate = categoriesStore.find(
+        (c) => c.id !== id && c.name.trim().toLowerCase() === trimmed.toLowerCase()
+      );
+      if (duplicate) {
+        return res.status(409).json({
+          success: false,
+          error: `A category named '${trimmed}' already exists.`,
+          status: 409,
+          path: req.originalUrl,
+          timestamp: new Date().toISOString(),
+          details: ['Unique constraint conflict: category name'],
+        });
+      }
+      updatedName = trimmed;
+    }
+
+    const updatedDescription =
+      description !== undefined
+        ? description && typeof description === 'string' && description.trim() !== ''
+          ? description.trim()
+          : null
+        : existing.description;
+
+    const updatedActive = active !== undefined ? Boolean(active) : existing.active;
+
+    const updatedCategory: CategoryRecord = {
+      ...existing,
+      name: updatedName,
+      description: updatedDescription,
+      active: updatedActive,
+      updatedAt: new Date().toISOString(),
+    };
+
+    categoriesStore[index] = updatedCategory;
+
+    // Preserve product associations when name changes: update categoryName on all associated products
+    if (existing.name !== updatedName) {
+      productsStore.forEach((p) => {
+        if (p.categoryId === id) {
+          p.categoryName = updatedName;
+        }
+      });
+    }
+
+    recordAuditLog({
+      req,
+      action: 'CATEGORY_UPDATED',
+      entity: 'CATEGORY',
+      entityId: id,
+      details: `Category #${id} updated: '${existing.name}' -> '${updatedName}'`,
+      oldValue: existing,
+      newValue: updatedCategory,
+    });
+
+    const productCount = productsStore.filter((p) => p.categoryId === id).length;
+
+    res.json({
+      success: true,
+      message: 'Category updated successfully',
+      data: {
+        ...updatedCategory,
+        productCount,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // PATCH /api/categories/:id/active & /api/v1/categories/:id/active
+  app.patch(['/api/categories/:id([0-9]+)/active', '/api/v1/categories/:id([0-9]+)/active'], (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    const category = categoriesStore.find((c) => c.id === id);
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        error: `Category with ID ${id} not found`,
+        status: 404,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const { active } = req.body;
+    if (active === undefined) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing required 'active' boolean in request body",
+        status: 400,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const newStatus = Boolean(active);
+    category.active = newStatus;
+    category.updatedAt = new Date().toISOString();
+
+    recordAuditLog({
+      req,
+      action: newStatus ? 'CATEGORY_ACTIVATED' : 'CATEGORY_DEACTIVATED',
+      entity: 'CATEGORY',
+      entityId: id,
+      details: `Category '${category.name}' ${newStatus ? 'activated' : 'deactivated'}`,
+      newValue: { active: newStatus },
+    });
+
+    const productCount = productsStore.filter((p) => p.categoryId === id).length;
+
+    res.json({
+      success: true,
+      message: `Category '${category.name}' ${newStatus ? 'activated' : 'deactivated'} successfully`,
+      data: {
+        ...category,
+        productCount,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // DELETE /api/categories/:id & /api/v1/categories/:id
+  app.delete(['/api/categories/:id([0-9]+)', '/api/v1/categories/:id([0-9]+)'], (req: Request, res: Response) => {
+    const id = Number(req.params.id);
+    const index = categoriesStore.findIndex((c) => c.id === id);
+    if (index === -1) {
+      return res.status(404).json({
+        success: false,
+        error: `Category with ID ${id} not found`,
+        status: 404,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const category = categoriesStore[index];
+
+    // Data-integrity check: check if any products reference this category
+    const associatedCount = productsStore.filter((p) => p.categoryId === id).length;
+    if (associatedCount > 0) {
+      return res.status(409).json({
+        success: false,
+        error: `Cannot delete category '${category.name}' because it is assigned to ${associatedCount} product(s). Please deactivate the category instead or reassign its products first.`,
+        status: 409,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+        details: [
+          `Category #${id} is referenced by ${associatedCount} active or existing product(s).`,
+          'Safety rule: Deactivate category instead of permanently deleting.',
+        ],
+      });
+    }
+
+    // Safely delete unused category
+    categoriesStore.splice(index, 1);
+
+    recordAuditLog({
+      req,
+      action: 'CATEGORY_DELETED',
+      entity: 'CATEGORY',
+      entityId: id,
+      details: `Category '${category.name}' permanently deleted`,
+      oldValue: category,
+    });
+
+    res.json({
+      success: true,
+      message: `Category '${category.name}' deleted successfully`,
+      data: { id },
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   // POST /api/products
-  app.post('/api/products', (req: Request, res: Response) => {
+  app.post(['/api/products', '/api/v1/products'], (req: Request, res: Response) => {
     const errorMsg = validateProductInput(req.body);
     if (errorMsg) {
       res.status(400).json({
@@ -1347,14 +1760,46 @@ async function startServer() {
       return;
     }
 
+    let resolvedCategoryId: number | null = null;
+    let resolvedCategoryName: string | null = null;
+
+    if (categoryId !== undefined && categoryId !== null && categoryId !== '') {
+      const numCatId = Number(categoryId);
+      const cat = categoriesStore.find((c) => c.id === numCatId);
+      if (!cat) {
+        res.status(400).json({
+          success: false,
+          error: `Category with ID ${numCatId} does not exist.`,
+          status: 400,
+          path: '/api/products',
+          timestamp: new Date().toISOString(),
+          details: [`Invalid categoryId: ${numCatId}`],
+        });
+        return;
+      }
+      if (!cat.active) {
+        res.status(400).json({
+          success: false,
+          error: `Cannot assign inactive category '${cat.name}' to a new product.`,
+          status: 400,
+          path: '/api/products',
+          timestamp: new Date().toISOString(),
+          details: [`Category '${cat.name}' is inactive`],
+        });
+        return;
+      }
+      resolvedCategoryId = numCatId;
+      resolvedCategoryName = cat.name;
+    }
+
     const newProduct: ProductRecord = {
       id: nextProductId++,
       name: name.trim(),
       sku: trimmedSku,
       barcode: trimmedBarcode,
       description: description ? description.trim() : null,
-      categoryId: categoryId || null,
-      categoryName: categoryId === 1 ? 'Produce' : categoryId === 2 ? 'Dairy' : null,
+      categoryId: resolvedCategoryId,
+      categoryName: resolvedCategoryName,
       supplierId: supplierId || null,
       supplierName: supplierId === 1 ? 'Green Valley Produce' : supplierId === 2 ? 'Sunny Ridge Dairies' : null,
       purchasePrice: Number(purchasePrice),
@@ -1616,13 +2061,53 @@ async function startServer() {
     }
 
     const existing = productsStore[index];
+
+    let resolvedCategoryId = existing.categoryId;
+    let resolvedCategoryName = existing.categoryName;
+
+    if (categoryId !== undefined) {
+      if (categoryId === null || categoryId === '') {
+        resolvedCategoryId = null;
+        resolvedCategoryName = null;
+      } else {
+        const numCatId = Number(categoryId);
+        const cat = categoriesStore.find((c) => c.id === numCatId);
+        if (!cat) {
+          res.status(400).json({
+            success: false,
+            error: `Category with ID ${numCatId} does not exist.`,
+            status: 400,
+            path: req.originalUrl,
+            timestamp: new Date().toISOString(),
+            details: [`Invalid categoryId: ${numCatId}`],
+          });
+          return;
+        }
+        // If assigning to a different category and it's inactive, reject
+        if (numCatId !== existing.categoryId && !cat.active) {
+          res.status(400).json({
+            success: false,
+            error: `Cannot assign inactive category '${cat.name}' to this product.`,
+            status: 400,
+            path: req.originalUrl,
+            timestamp: new Date().toISOString(),
+            details: [`Category '${cat.name}' is inactive`],
+          });
+          return;
+        }
+        resolvedCategoryId = numCatId;
+        resolvedCategoryName = cat.name;
+      }
+    }
+
     const updated: ProductRecord = {
       ...existing,
       name: name.trim(),
       sku: trimmedSku,
       barcode: trimmedBarcode,
       description: description ? description.trim() : null,
-      categoryId: categoryId !== undefined ? categoryId : existing.categoryId,
+      categoryId: resolvedCategoryId,
+      categoryName: resolvedCategoryName,
       supplierId: supplierId !== undefined ? supplierId : existing.supplierId,
       purchasePrice: Number(purchasePrice),
       sellingPrice: Number(sellingPrice),

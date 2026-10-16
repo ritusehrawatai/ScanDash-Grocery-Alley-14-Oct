@@ -36,7 +36,7 @@ function PosShell() {
 
   // If user is a Cashier, auto-route to POS Terminal on initial load or login
   useEffect(() => {
-    if (isCashier && (activeTab === 'dashboard' || activeTab === 'users' || activeTab === 'reports' || activeTab === 'invoices' || activeTab === 'audit')) {
+    if (isCashier && (activeTab === 'dashboard' || activeTab === 'users' || activeTab === 'reports' || activeTab === 'invoices' || activeTab === 'audit' || activeTab === 'categories')) {
       setActiveTab('pos');
     }
   }, [isCashier, user?.id]);
@@ -122,7 +122,15 @@ function PosShell() {
               isCashier ? (
                 <RbacRestrictedView tabName="Products & Catalog Management" onNavigate={setActiveTab} />
               ) : (
-                <ProductList />
+                <ProductList initialTab="products" />
+              )
+            )}
+
+            {activeTab === 'categories' && (
+              isCashier ? (
+                <RbacRestrictedView tabName="Products & Catalog Management" onNavigate={setActiveTab} />
+              ) : (
+                <ProductList initialTab="categories" />
               )
             )}
 

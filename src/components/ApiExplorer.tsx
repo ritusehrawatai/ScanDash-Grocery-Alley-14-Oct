@@ -29,6 +29,25 @@ const ENDPOINTS: EndpointOption[] = [
     path: '/api/v1/auth/me',
   },
   {
+    label: 'GET /api/categories — List All Product Categories (with productCount)',
+    method: 'GET',
+    path: '/api/categories',
+  },
+  {
+    label: 'POST /api/categories — Create Product Category (RBAC: OWNER/ADMIN only)',
+    method: 'POST',
+    path: '/api/categories',
+    defaultBody: JSON.stringify(
+      {
+        name: 'Gourmet Deli',
+        description: 'Artisan sandwiches, cured meats, and deli cheeses',
+        active: true,
+      },
+      null,
+      2
+    ),
+  },
+  {
     label: 'GET /api/users — List All Users (RBAC: OWNER/ADMIN only, 403 Forbidden for CASHIER)',
     method: 'GET',
     path: '/api/users',

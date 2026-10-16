@@ -10,8 +10,10 @@ import {
   Package,
   Barcode as BarcodeIcon,
   X,
+  Tag,
 } from 'lucide-react';
 import { Product, CreateProductInput, UpdateProductInput } from '../../types/product';
+import { ProductCategory } from '../../types/category';
 import {
   fetchProducts,
   fetchProductByBarcode,
@@ -19,13 +21,28 @@ import {
   updateProduct,
   toggleProductActive,
 } from '../../api/productApi';
+import { fetchCategories } from '../../api/categoryApi';
 import { updateProductThreshold } from '../../api/userApi';
 import { ProductSearchBar } from '../common/ProductSearchBar';
 import { ProductDetailModal } from './ProductDetailModal';
 import { ProductFormModal } from './ProductFormModal';
 import { DeactivateConfirmModal } from './DeactivateConfirmModal';
+import { CategoryList } from '../CategoryManagement/CategoryList';
 
-export const ProductList: React.FC = () => {
+interface ProductListProps {
+  initialTab?: 'products' | 'categories';
+  onNavigateToCategories?: () => void;
+}
+
+export const ProductList: React.FC<ProductListProps> = ({ initialTab = 'products', onNavigateToCategories }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'products' | 'categories'>(initialTab);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveSubTab(initialTab);
+    }
+  }, [initialTab]);
+
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -114,8 +131,8 @@ export const ProductList: React.FC = () => {
     let lastKeyTime = 0;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't intercept if an interactive modal is currently active
-      if (isAddingProduct || editingProduct || viewingProduct || deactivatingProduct) {
+      // Don't intercept if an interactive modal is currently active or not on products tab
+      if (activeSubTab !== 'products' || isAddingProduct || editingProduct || viewingProduct || deactivatingProduct) {
         return;
       }
 
@@ -162,7 +179,7 @@ export const ProductList: React.FC = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isAddingProduct, editingProduct, viewingProduct, deactivatingProduct, products]);
+  }, [activeSubTab, isAddingProduct, editingProduct, viewingProduct, deactivatingProduct, products]);
 
   // Determine if active search query is a barcode search
   const isBarcodeSearch = useMemo(() => {
@@ -202,14 +219,33 @@ export const ProductList: React.FC = () => {
     });
   }, [products, searchQuery, selectedCategory, statusFilter]);
 
+  const [dbCategories, setDbCategories] = useState<ProductCategory[]>([]);
+
+  useEffect(() => {
+    fetchCategories().then(setDbCategories).catch(() => {});
+  }, []);
+
   // Unique categories for filter dropdown
   const categoriesList = useMemo(() => {
     const set = new Set<string>();
+    dbCategories.forEach((c) => set.add(c.name));
     products.forEach((p) => {
       if (p.categoryName) set.add(p.categoryName);
     });
     return Array.from(set).sort();
-  }, [products]);
+  }, [products, dbCategories]);
+
+  // Synchronize category updates when modified in CategoryList
+  const handleCategoriesChanged = async () => {
+    try {
+      const cats = await fetchCategories();
+      setDbCategories(cats);
+      const data = await fetchProducts();
+      setProducts(data);
+    } catch {
+      // Keep existing data on error
+    }
+  };
 
   // Handlers for Add / Edit
   const handleSaveProduct = async (data: CreateProductInput | UpdateProductInput) => {
@@ -253,39 +289,115 @@ export const ProductList: React.FC = () => {
         </div>
       )}
 
-      {/* Top Banner / Actions Bar */}
-      <div className="bg-white border border-stone-200 rounded-lg p-5 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Consolidated Products & Catalog Navigation Tabs */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-stone-200 rounded-lg px-5 py-3 shadow-2xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+            {activeSubTab === 'products' ? <Package className="w-4 h-4" /> : <Tag className="w-4 h-4" />}
+          </div>
           <div>
-            <div className="flex items-center gap-2 text-xs font-mono text-stone-500 uppercase tracking-wider">
-              <span>Catalog & Price Master</span>
-              <span aria-hidden="true">·</span>
-              <span>REST API Connected</span>
+            <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider font-semibold">
+              Products & Catalog Management
             </div>
-            <h1 className="text-xl font-bold text-stone-900 mt-0.5">Product Management</h1>
-            <div className="flex items-center gap-2 text-xs text-stone-500 mt-1">
-              <span>{products.length} Total SKUs</span>
-              <span aria-hidden="true">·</span>
-              <span className="text-emerald-700 font-medium">
-                {products.filter((p) => p.active).length} Active
-              </span>
-              <span aria-hidden="true">·</span>
-              <span className="text-stone-500">
-                {products.filter((p) => !p.active).length} Inactive
-              </span>
+            <div className="text-sm font-bold text-stone-900">
+              {activeSubTab === 'products' ? 'Products & SKUs' : 'Product Categories'}
             </div>
           </div>
+        </div>
 
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={loadProducts}
-              disabled={loading}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-md transition-colors cursor-pointer disabled:opacity-50"
-              title="Refresh product list from API"
+        {/* Integrated Sub-Tabs: Products vs Categories */}
+        <div className="flex items-center gap-1 bg-stone-100 p-1 rounded-lg">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('products')}
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+              activeSubTab === 'products'
+                ? 'bg-white text-stone-900 shadow-2xs font-bold'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Package className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Products</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium ${
+                activeSubTab === 'products' ? 'bg-emerald-100 text-emerald-800' : 'bg-stone-200 text-stone-600'
+              }`}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
-              <span>Refresh</span>
-            </button>
+              {products.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('categories')}
+            className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
+              activeSubTab === 'categories'
+                ? 'bg-white text-stone-900 shadow-2xs font-bold'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <Tag className="w-3.5 h-3.5 text-purple-600" />
+            <span>Categories</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-medium ${
+                activeSubTab === 'categories' ? 'bg-purple-100 text-purple-800' : 'bg-stone-200 text-stone-600'
+              }`}
+            >
+              {dbCategories.length}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {activeSubTab === 'categories' ? (
+        <CategoryList
+          onNavigateToProducts={() => setActiveSubTab('products')}
+          onCategoriesChanged={handleCategoriesChanged}
+        />
+      ) : (
+        <>
+          {/* Top Banner / Actions Bar */}
+          <div className="bg-white border border-stone-200 rounded-lg p-5 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-mono text-stone-500 uppercase tracking-wider">
+                  <span>Catalog & Price Master</span>
+                  <span aria-hidden="true">·</span>
+                  <span>REST API Connected</span>
+                </div>
+                <h1 className="text-xl font-bold text-stone-900 mt-0.5">Product Management</h1>
+                <div className="flex items-center gap-2 text-xs text-stone-500 mt-1">
+                  <span>{products.length} Total SKUs</span>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-emerald-700 font-medium">
+                    {products.filter((p) => p.active).length} Active
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-stone-500">
+                    {products.filter((p) => !p.active).length} Inactive
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5">
+                <button
+                  onClick={loadProducts}
+                  disabled={loading}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-md transition-colors cursor-pointer disabled:opacity-50"
+                  title="Refresh product list from API"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-emerald-600' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveSubTab('categories')}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-stone-700 bg-stone-100 hover:bg-stone-200 border border-stone-200 rounded-md transition-colors cursor-pointer"
+                  title="Manage Product Categories"
+                >
+                  <Tag className="w-3.5 h-3.5 text-stone-500" />
+                  <span>Manage Categories</span>
+                </button>
 
             <button
               onClick={() => {
@@ -670,6 +782,8 @@ export const ProductList: React.FC = () => {
           </div>
         </div>
       </div>
+    </>
+  )}
 
       {/* Modals */}
       {viewingProduct && (

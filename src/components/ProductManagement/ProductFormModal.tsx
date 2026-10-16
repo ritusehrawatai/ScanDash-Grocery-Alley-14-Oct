@@ -1,23 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Save, AlertCircle, Barcode, Check } from 'lucide-react';
 import { Product, CreateProductInput, UpdateProductInput } from '../../types/product';
+import { ProductCategory } from '../../types/category';
+import { fetchCategories } from '../../api/categoryApi';
 
 interface ProductFormModalProps {
   productToEdit?: Product | null;
   onClose: () => void;
   onSubmit: (data: CreateProductInput | UpdateProductInput) => Promise<void>;
 }
-
-const CATEGORIES = [
-  { id: 1, name: 'Produce' },
-  { id: 2, name: 'Dairy' },
-  { id: 3, name: 'Bakery' },
-  { id: 4, name: 'Beverages' },
-  { id: 5, name: 'Meat & Seafood' },
-  { id: 6, name: 'Pantry & Dry Goods' },
-  { id: 7, name: 'Snacks & Confectionery' },
-  { id: 8, name: 'Frozen Foods' },
-];
 
 const SUPPLIERS = [
   { id: 1, name: 'Green Valley Produce' },
@@ -60,6 +51,37 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
+
+  // Managed Categories from backend
+  const [availableCategories, setAvailableCategories] = useState<ProductCategory[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState<boolean>(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchCategories()
+      .then((cats) => {
+        if (isMounted) {
+          setAvailableCategories(cats);
+          setLoadingCategories(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load categories:', err);
+        if (isMounted) setLoadingCategories(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const displayedCategories = useMemo(() => {
+    return availableCategories.filter((c) => {
+      if (c.active) return true;
+      // If editing a product whose current category is inactive, preserve and display it
+      if (productToEdit && productToEdit.categoryId === c.id) return true;
+      return false;
+    });
+  }, [availableCategories, productToEdit]);
 
   // Barcode scanning support
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -332,15 +354,22 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 <select
                   value={categoryId}
                   onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
-                  className="w-full px-3 py-2 border border-stone-300 rounded-md text-xs focus:outline-emerald-600 bg-white cursor-pointer"
+                  disabled={loadingCategories}
+                  className="w-full px-3 py-2 border border-stone-300 rounded-md text-xs focus:outline-emerald-600 bg-white cursor-pointer disabled:bg-stone-100"
                 >
-                  <option value="">Select Category...</option>
-                  {CATEGORIES.map((c) => (
+                  <option value="">{loadingCategories ? 'Loading categories...' : 'Select Category...'}</option>
+                  {displayedCategories.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.name}
+                      {c.name} {!c.active ? '(Inactive - Current Category)' : ''}
                     </option>
                   ))}
                 </select>
+                {categoryId !== '' && availableCategories.some((c) => c.id === categoryId && !c.active) && (
+                  <p className="mt-1 text-[11px] text-amber-700 flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    <span>This product is assigned to an inactive category. Keep it or select an active category.</span>
+                  </p>
+                )}
               </div>
 
               <div>

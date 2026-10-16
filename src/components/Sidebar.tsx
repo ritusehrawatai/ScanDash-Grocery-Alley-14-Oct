@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export type NavTab = 'dashboard' | 'reports' | 'pos' | 'products' | 'inventory' | 'invoices' | 'users' | 'audit' | 'health' | 'architecture' | 'explorer' | 'setup';
+export type NavTab = 'dashboard' | 'reports' | 'pos' | 'products' | 'categories' | 'inventory' | 'invoices' | 'users' | 'audit' | 'health' | 'architecture' | 'explorer' | 'setup';
 
 interface SidebarProps {
   activeTab: NavTab;
